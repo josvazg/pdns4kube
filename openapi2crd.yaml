@@ -29,7 +29,7 @@ spec:
       categories: [pdns]
       shortNames: [dz]
       mappings:
-        - majorVersion: v0.0.15
+        - majorVersion: v0_0_15
           openAPIRef:
             name: pdns-api
           parameters:

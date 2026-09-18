@@ -26,12 +26,12 @@ spec:
             description: |-
               Specification of the dnszone supporting the following versions:
 
-              - v0.0.15
+              - v0_0_15
 
               At most one versioned spec can be specified. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
             properties:
-              v0.0.15:
-                description: The spec of the dnszone resource for version v0.0.15.
+              v0_0_15:
+                description: The spec of the dnszone resource for version v0_0_15.
                 properties:
                   entry:
                     description: The entry fields of the dnszone resource spec. These
@@ -94,9 +94,9 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
-              v0.0.15:
+              v0_0_15:
                 description: The last observed Atlas state of the dnszone resource
-                  for version v0.0.15.
+                  for version v0_0_15.
                 properties:
                   id:
                     type: string
