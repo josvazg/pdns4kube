@@ -20,6 +20,7 @@
             kind
             kubectl
             mage
+	    controller-gen
           ];
 
           shellHook = ''
