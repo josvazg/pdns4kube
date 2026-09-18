@@ -1,0 +1,77 @@
+openapi: 3.0.3
+info:
+  title: PowerDNS Zone API
+  version: 0.0.15
+paths:
+  /api/v1/servers/localhost/zones:
+    post:
+      summary: Create Zone
+      operationId: createZone
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Zone'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Zone'
+
+  /api/v1/servers/localhost/zones/{zone_id}:
+    get:
+      summary: Read Zone
+      operationId: getZone
+      parameters:
+        - name: zone_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Zone'
+    delete:
+      summary: Delete Zone
+      operationId: deleteZone
+      parameters:
+        - name: zone_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+
+components:
+  schemas:
+    Zone:
+      type: object
+      required:
+        - name
+        - kind
+      properties:
+        id:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          example: "example.com."
+        kind:
+          type: string
+          enum: [Native, Master, Slave]
+          default: "Native"
+        nameservers:
+          type: array
+          items:
+            type: string
+          example: ["ns1.example.com."]
+

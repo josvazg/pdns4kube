@@ -1,0 +1,50 @@
+apiVersion: atlas2crd.mongodb.com/v1alpha1
+kind: Config
+
+spec:
+  # Named OpenAPI specs that CRDs can reference.
+  openapi:
+    - name: pdns-api
+      path: pdns-openapi3.yaml
+
+  # One or more named plugin sets. Mark one as default: true.
+  # Plugin sets can inherit from another set via inheritFrom.
+  pluginSets:
+    - name: default
+      default: true
+      plugins:
+        - base
+        - major_version
+        - entry
+        - status
+        - read_only_properties
+        - read_write_properties
+
+  # CRDs to generate.
+  crd:
+    - gvk:
+        group: pdns.example.io
+        version: v1
+        kind: DNSZone
+      categories: [pdns]
+      shortNames: [dz]
+      mappings:
+        - majorVersion: v0.0.15
+          openAPIRef:
+            name: pdns-api
+          parameters:
+            path:
+              name: '/api/v1/servers/localhost/zones/{zoneId}'
+              verb: post
+          entry:
+            schema: Zone     # OpenAPI schema name for spec fields
+            filters:
+              readWriteOnly: true       # include only read-write properties
+              skipProperties: []
+              sensitiveProperties: []
+          status:
+            schema: Zone
+            filters:
+              readOnly: true
+              skipProperties: []
+
