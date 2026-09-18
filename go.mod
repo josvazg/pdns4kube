@@ -4,6 +4,8 @@ go 1.26.7
 
 tool github.com/crd2go/openapi2crd
 
+require github.com/magefile/mage v1.17.2
+
 require (
 	cel.dev/expr v0.25.2 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect

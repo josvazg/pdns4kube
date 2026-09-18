@@ -15,10 +15,11 @@
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
             git
-	    go
+            go
             docker
             kind
             kubectl
+            mage
           ];
 
           shellHook = ''
