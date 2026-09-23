@@ -20,7 +20,7 @@
             kind
             kubectl
             mage
-	    controller-gen
+	    kubernetes-controller-tools
           ];
 
           shellHook = ''
@@ -28,7 +28,8 @@
             echo "Go:      $(go version)"
             echo "Kind:    $(kind version)"
             echo "Kubectl: $(kubectl version --client --output=yaml | grep gitVersion | head -n 1 | awk '{print $2}')"
-          '';
+            alias oc=opencode
+	  '';
         };
       }
     );
