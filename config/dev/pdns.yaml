@@ -1,0 +1,46 @@
+# Local development PowerDNS Authoritative server for pdns4kube.
+# WARNING: The API key below is for LOCAL DEVELOPMENT ONLY. Never use it
+# in any shared, staging, or production environment.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pdns-dev
+  labels:
+    app: pdns-dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pdns-dev
+  template:
+    metadata:
+      labels:
+        app: pdns-dev
+    spec:
+      containers:
+        - name: pdns
+          image: powerdns/pdns-auth-49
+          ports:
+            - name: api
+              containerPort: 8081
+              protocol: TCP
+          env:
+            # Local development only — enables the built-in HTTP API.
+            - name: PDNS_AUTH_API_KEY
+              value: pdns4kube-dev-key
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pdns-dev
+  labels:
+    app: pdns-dev
+spec:
+  type: ClusterIP
+  selector:
+    app: pdns-dev
+  ports:
+    - name: api
+      port: 8081
+      targetPort: 8081
+      protocol: TCP

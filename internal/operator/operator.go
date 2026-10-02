@@ -6,25 +6,63 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"os"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	"example.com/pdns4kube/internal/controller"
+	"example.com/pdns4kube/internal/controller/zone"
+	"example.com/pdns4kube/internal/pdns"
 	v1 "example.com/pdns4kube/v1"
 )
 
-// Run executes the operator with the given arguments and environment
-// lookup. getenv is reserved for future configuration (e.g. environment
-// driven overrides) and is intentionally unused for now.
-func Run(ctx context.Context, args []string, getenv func(string) string) error {
-	_ = getenv // reserved for future config
+type operatorCfg struct {
+	proveAddr            string
+	metricsAddr          string
+	enableLeaderElection bool
+	pdnsAPIURL           string
+	pdnsAPIKey           string
+	zopts                zap.Options
+}
 
+// Run executes the operator with the given arguments and environment
+// lookup. getenv is used for environment driven configuration; when nil
+// it falls back to os.Getenv.
+func Run(ctx context.Context, args []string, getenv func(string) string) error {
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	opConfig, err := parseFlagsConfig(args, getenv)
+	if err != nil {
+		return fmt.Errorf("failed to parse config args: %w", err)
+	}
+
+	mgr, err := createManager(opConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create manager: %w", err)
+	}
+
+	if err := registerReconcilers(mgr, opConfig); err != nil {
+		return fmt.Errorf("failed to register reconcilers: %w", err)
+	}
+
+	if err := setupChecks(mgr); err != nil {
+		return fmt.Errorf("failed to setup operator checks: %w", err)
+	}
+
+	setupLog := ctrl.Log.WithName("setup")
+	setupLog.Info("starting manager")
+	return mgr.Start(ctx)
+}
+
+func parseFlagsConfig(args []string, getenv func(string) string) (*operatorCfg, error) {
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
@@ -39,11 +77,20 @@ func Run(ctx context.Context, args []string, getenv func(string) string) error {
 	}
 	opts.BindFlags(fs)
 	if err := fs.Parse(args); err != nil {
-		return fmt.Errorf("parse flags: %w", err)
+		return nil, fmt.Errorf("parse flags: %w", err)
 	}
+	return &operatorCfg{
+		proveAddr:            probeAddr,
+		metricsAddr:          metricsAddr,
+		enableLeaderElection: enableLeaderElection,
+		pdnsAPIURL:           getenv("PDNS_API_URL"),
+		pdnsAPIKey:           getenv("PDNS_API_KEY"),
+		zopts:                opts,
+	}, nil
+}
 
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
-	setupLog := ctrl.Log.WithName("setup")
+func createManager(opConfig *operatorCfg) (manager.Manager, error) {
+	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opConfig.zopts)))
 
 	scheme := runtime.NewScheme()
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
@@ -51,33 +98,41 @@ func Run(ctx context.Context, args []string, getenv func(string) string) error {
 
 	cfg, err := ctrl.GetConfig()
 	if err != nil {
-		return fmt.Errorf("get config: %w", err)
+		return nil, fmt.Errorf("get config: %w", err)
 	}
-	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
+	return ctrl.NewManager(cfg, ctrl.Options{
 		Scheme:                 scheme,
-		Metrics:                metricsserver.Options{BindAddress: metricsAddr},
-		HealthProbeBindAddress: probeAddr,
-		LeaderElection:         enableLeaderElection,
+		Metrics:                metricsserver.Options{BindAddress: opConfig.metricsAddr},
+		HealthProbeBindAddress: opConfig.proveAddr,
+		LeaderElection:         opConfig.enableLeaderElection,
 		LeaderElectionID:       "pdns4kube.pdns.example.io",
 	})
-	if err != nil {
-		return fmt.Errorf("create manager: %w", err)
-	}
+}
 
-	if err := (&controller.DNSZoneReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		return fmt.Errorf("setup DNSZone controller: %w", err)
-	}
-
+func setupChecks(mgr manager.Manager) error {
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		return fmt.Errorf("setup health check: %w", err)
 	}
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 		return fmt.Errorf("setup ready check: %w", err)
 	}
+	return nil
+}
 
-	setupLog.Info("starting manager")
-	return mgr.Start(ctx)
+func registerReconcilers(mgr manager.Manager, opConfig *operatorCfg) error {
+	if opConfig.pdnsAPIURL == "" {
+		return fmt.Errorf("PDNS_API_URL is required")
+	}
+	if opConfig.pdnsAPIKey == "" {
+		return fmt.Errorf("PDNS_API_KEY is required")
+	}
+	pdnsClient := pdns.NewClient(opConfig.pdnsAPIURL, opConfig.pdnsAPIKey, nil)
+	reconciler, err := zone.NewPDNSZoneReconciler(zone.Predicates(), pdnsClient)
+	if err != nil {
+		return fmt.Errorf("error creating DNSZone controller: %w", err)
+	}
+	if err := reconciler.SetupWithManager(mgr, controller.Options{}); err != nil {
+		return fmt.Errorf("failed setup DNSZone controller: %w", err)
+	}
+	return nil
 }
