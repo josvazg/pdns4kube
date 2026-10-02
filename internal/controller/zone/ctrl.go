@@ -1,8 +1,8 @@
 package zone
 
 import (
-	"example.com/pdns4kube/internal/pdns"
-	v1 "example.com/pdns4kube/v1"
+	"github.com/josvazg/pdns4kube/internal/pdns"
+	v1 "github.com/josvazg/pdns4kube/v1"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	constate "github.com/crd2go/constate"

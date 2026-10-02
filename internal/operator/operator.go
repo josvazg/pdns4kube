@@ -18,9 +18,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	"example.com/pdns4kube/internal/controller/zone"
-	"example.com/pdns4kube/internal/pdns"
-	v1 "example.com/pdns4kube/v1"
+	"github.com/josvazg/pdns4kube/internal/controller/zone"
+	"github.com/josvazg/pdns4kube/internal/pdns"
+	v1 "github.com/josvazg/pdns4kube/v1"
 )
 
 type operatorCfg struct {

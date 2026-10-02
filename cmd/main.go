@@ -6,7 +6,7 @@ import (
 
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	"example.com/pdns4kube/internal/operator"
+	"github.com/josvazg/pdns4kube/internal/operator"
 )
 
 func main() {

@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"example.com/pdns4kube/internal/pdns"
-	v1 "example.com/pdns4kube/v1"
 	constate "github.com/crd2go/constate"
+	"github.com/josvazg/pdns4kube/internal/pdns"
+	v1 "github.com/josvazg/pdns4kube/v1"
 )
 
 func TestV000015Handler(t *testing.T) {
