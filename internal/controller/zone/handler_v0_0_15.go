@@ -3,6 +3,7 @@ package zone
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"example.com/pdns4kube/internal/pdns"
 	v1 "example.com/pdns4kube/v1"
@@ -49,25 +50,11 @@ func (h *V000015Handler) HandleInitial(ctx context.Context, obj *v1.DNSZone) (co
 }
 
 func (h *V000015Handler) HandleCreated(ctx context.Context, obj *v1.DNSZone) (constate.Result, error) {
-	z, err := zoneFromEntry(obj)
-	if err != nil {
-		return constate.ErrorState(constate.StateCreated, err)
-	}
-	if err := h.pdns.UpdateZone(ctx, z.Name, z); err != nil {
-		return constate.ErrorState(constate.StateCreated, fmt.Errorf("update zone: %w", err))
-	}
-	return constate.NextState(constate.StateUpdated, "zone updated in pdns")
+	return h.upsert(ctx, obj)
 }
 
 func (h *V000015Handler) HandleUpdated(ctx context.Context, obj *v1.DNSZone) (constate.Result, error) {
-	z, err := zoneFromEntry(obj)
-	if err != nil {
-		return constate.ErrorState(constate.StateUpdated, err)
-	}
-	if err := h.pdns.UpdateZone(ctx, z.Name, z); err != nil {
-		return constate.ErrorState(constate.StateUpdated, fmt.Errorf("update zone: %w", err))
-	}
-	return constate.NextState(constate.StateUpdated, "zone updated in pdns")
+	return h.upsert(ctx, obj)
 }
 
 func (h *V000015Handler) HandleDeletionRequested(ctx context.Context, obj *v1.DNSZone) (constate.Result, error) {
@@ -79,4 +66,16 @@ func (h *V000015Handler) HandleDeletionRequested(ctx context.Context, obj *v1.DN
 		return constate.ErrorState(constate.StateDeletionRequested, fmt.Errorf("delete zone: %w", err))
 	}
 	return constate.NextState(constate.StateDeleted, "zone deleted from pdns")
+}
+
+func (h *V000015Handler) upsert(ctx context.Context, obj *v1.DNSZone) (constate.Result, error) {
+	z, err := zoneFromEntry(obj)
+	if err != nil {
+		return constate.ErrorState(constate.StateCreated, err)
+	}
+	log.Printf("updatign with %v", z)
+	if err := h.pdns.UpdateZone(ctx, z.Name, z); err != nil {
+		return constate.ErrorState(constate.StateCreated, fmt.Errorf("update zone: %w", err))
+	}
+	return constate.NextState(constate.StateUpdated, "zone updated in pdns")
 }

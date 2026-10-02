@@ -87,6 +87,91 @@ func TestUpdateZone(t *testing.T) {
 	if rec.path != "/api/v1/servers/localhost/zones/example%20org..Native" {
 		t.Errorf("path = %q (zone ID not escaped)", rec.path)
 	}
+	var got Zone
+	if err := json.Unmarshal(rec.body, &got); err != nil {
+		t.Fatalf("decode request body: %v", err)
+	}
+	if got.Kind != "Native" {
+		t.Errorf("PUT body kind = %q, want Native", got.Kind)
+	}
+}
+
+func TestUpdateZoneWithNameserversSendsPutAndPatch(t *testing.T) {
+	type request struct {
+		method string
+		path   string
+		body   []byte
+	}
+	var requests []request
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		requests = append(requests, request{method: r.Method, path: r.URL.EscapedPath(), body: b})
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "k", srv.Client())
+	err := c.UpdateZone(context.Background(), "example.org.", Zone{
+		Name:        "example.org.",
+		Kind:        "Native",
+		Nameservers: []string{"ns1.example.org.", "ns2.example.org."},
+	})
+	if err != nil {
+		t.Fatalf("UpdateZone: %v", err)
+	}
+
+	if len(requests) != 2 {
+		t.Fatalf("got %d requests, want 2: %v", len(requests), requests)
+	}
+	if requests[0].method != http.MethodPut || requests[1].method != http.MethodPatch {
+		t.Errorf("methods = [%s %s], want [PUT PATCH]", requests[0].method, requests[1].method)
+	}
+	wantPath := "/api/v1/servers/localhost/zones/example.org."
+	if requests[0].path != wantPath || requests[1].path != wantPath {
+		t.Errorf("paths = [%s %s], want both %s", requests[0].path, requests[1].path, wantPath)
+	}
+
+	var got rrsetsPayload
+	if err := json.Unmarshal(requests[1].body, &got); err != nil {
+		t.Fatalf("decode PATCH body: %v", err)
+	}
+	if len(got.RRsets) != 1 {
+		t.Fatalf("rrsets = %+v, want 1 entry", got.RRsets)
+	}
+	rr := got.RRsets[0]
+	if rr.Name != "example.org." || rr.Type != "NS" || rr.TTL != defaultNSTTL || rr.ChangeType != "REPLACE" {
+		t.Errorf("rrset = %+v, want apex NS REPLACE with ttl %d", rr, defaultNSTTL)
+	}
+	if len(rr.Records) != 2 || rr.Records[0].Content != "ns1.example.org." || rr.Records[1].Content != "ns2.example.org." {
+		t.Errorf("records = %+v, want ns1 and ns2", rr.Records)
+	}
+}
+
+func TestUpdateZoneEmptyNameserversSendsReplaceWithNoRecords(t *testing.T) {
+	var bodies []rrsetsPayload
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPatch {
+			b, _ := io.ReadAll(r.Body)
+			var p rrsetsPayload
+			if err := json.Unmarshal(b, &p); err != nil {
+				t.Errorf("decode PATCH body: %v", err)
+			}
+			bodies = append(bodies, p)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "k", srv.Client())
+	if err := c.UpdateZone(context.Background(), "example.org.", Zone{Kind: "Native", Nameservers: []string{}}); err != nil {
+		t.Fatalf("UpdateZone: %v", err)
+	}
+	if len(bodies) != 1 {
+		t.Fatalf("got %d PATCH bodies, want 1", len(bodies))
+	}
+	if len(bodies[0].RRsets) != 1 || len(bodies[0].RRsets[0].Records) != 0 {
+		t.Errorf("rrsets = %+v, want REPLACE with empty records", bodies[0])
+	}
 }
 
 func TestDeleteZone(t *testing.T) {

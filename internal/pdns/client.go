@@ -26,6 +26,31 @@ type Zone struct {
 	Nameservers []string `json:"nameservers,omitempty"`
 }
 
+// defaultNSTTL is the TTL applied to the apex NS RRset when replacing
+// nameservers via PATCH. The CRD has no TTL field, so a documented default
+// is used.
+const defaultNSTTL = 3600
+
+// RRset is a single RRset entry in a PATCH rrsets payload.
+type RRset struct {
+	Name       string   `json:"name"`
+	Type       string   `json:"type"`
+	TTL        int      `json:"ttl"`
+	ChangeType string   `json:"changetype"`
+	Records    []Record `json:"records"`
+}
+
+// Record is a single resource record within an RRset.
+type Record struct {
+	Content  string `json:"content"`
+	Disabled bool   `json:"disabled,omitempty"`
+}
+
+// rrsetsPayload is the request body for zone PATCH requests.
+type rrsetsPayload struct {
+	RRsets []RRset `json:"rrsets"`
+}
+
 // Client talks to the PowerDNS Authoritative v4 API.
 type Client struct {
 	baseURL    string
@@ -64,14 +89,46 @@ func (c *Client) CreateZone(ctx context.Context, z Zone) error {
 	return err
 }
 
-// UpdateZone replaces the configuration of the zone with the given ID.
+// UpdateZone updates the zone with the given ID. Basic zone configuration
+// (at minimum the kind) is sent via PUT to /zones/{id}, which PowerDNS uses
+// for zone properties. If z.Nameservers is non-nil, a PATCH follows that
+// replaces the apex NS RRset; a nil slice skips the PATCH, while an empty
+// slice replaces the NS RRset with no records.
 func (c *Client) UpdateZone(ctx context.Context, zoneID string, z Zone) error {
-	resp, err := c.do(ctx, http.MethodPut, c.zonesURL(zoneID), z)
+	resp, err := c.do(ctx, http.MethodPut, c.zonesURL(zoneID), Zone{Kind: z.Kind})
 	if err != nil {
 		return err
 	}
+	if err := drain(resp); err != nil {
+		return err
+	}
+
+	if z.Nameservers == nil {
+		return nil
+	}
+
+	records := make([]Record, 0, len(z.Nameservers))
+	for _, ns := range z.Nameservers {
+		records = append(records, Record{Content: ns})
+	}
+	payload := rrsetsPayload{RRsets: []RRset{{
+		Name:       zoneID,
+		Type:       "NS",
+		TTL:        defaultNSTTL,
+		ChangeType: "REPLACE",
+		Records:    records,
+	}}}
+	resp, err = c.do(ctx, http.MethodPatch, c.zonesURL(zoneID), payload)
+	if err != nil {
+		return err
+	}
+	return drain(resp)
+}
+
+// drain reads and discards the response body and closes it.
+func drain(resp io.ReadCloser) error {
 	defer resp.Close()
-	_, err = io.Copy(io.Discard, resp)
+	_, err := io.Copy(io.Discard, resp)
 	return err
 }
 
