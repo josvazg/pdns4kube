@@ -17,7 +17,7 @@ func TestV000015Handler(t *testing.T) {
 
 	t.Run("HandleInitial creates zone", func(t *testing.T) {
 		pdnsClient := &fakePDNSZoneClient{}
-		h := &V000015Handler{pdns: pdnsClient}
+		h := newTestHandler(t, pdnsClient)
 
 		res, err := h.HandleInitial(ctx, testDNSZone())
 		if err != nil {
@@ -42,7 +42,7 @@ func TestV000015Handler(t *testing.T) {
 
 	t.Run("HandleInitial missing entry", func(t *testing.T) {
 		pdnsClient := &fakePDNSZoneClient{}
-		h := &V000015Handler{pdns: pdnsClient}
+		h := newTestHandler(t, pdnsClient)
 
 		res, err := h.HandleInitial(ctx, &v1.DNSZone{})
 		if wantErr := "v0_0_15 spec entry is required"; err == nil || !strings.Contains(err.Error(), wantErr) {
@@ -58,7 +58,7 @@ func TestV000015Handler(t *testing.T) {
 
 	t.Run("HandleInitial create error", func(t *testing.T) {
 		pdnsClient := &fakePDNSZoneClient{createErr: errors.New("pdns failure")}
-		h := &V000015Handler{pdns: pdnsClient}
+		h := newTestHandler(t, pdnsClient)
 
 		res, err := h.HandleInitial(ctx, testDNSZone())
 		if wantErr := "create zone: pdns failure"; err == nil || !strings.Contains(err.Error(), wantErr) {
@@ -71,7 +71,7 @@ func TestV000015Handler(t *testing.T) {
 
 	t.Run("HandleCreated updates zone", func(t *testing.T) {
 		pdnsClient := &fakePDNSZoneClient{}
-		h := &V000015Handler{pdns: pdnsClient}
+		h := newTestHandler(t, pdnsClient)
 
 		res, err := h.HandleCreated(ctx, testDNSZone())
 		if err != nil {
@@ -100,7 +100,7 @@ func TestV000015Handler(t *testing.T) {
 
 	t.Run("HandleUpdated updates zone", func(t *testing.T) {
 		pdnsClient := &fakePDNSZoneClient{}
-		h := &V000015Handler{pdns: pdnsClient}
+		h := newTestHandler(t, pdnsClient)
 
 		res, err := h.HandleUpdated(ctx, testDNSZone())
 		if err != nil {
@@ -129,7 +129,7 @@ func TestV000015Handler(t *testing.T) {
 
 	t.Run("HandleCreated missing entry", func(t *testing.T) {
 		pdnsClient := &fakePDNSZoneClient{}
-		h := &V000015Handler{pdns: pdnsClient}
+		h := newTestHandler(t, pdnsClient)
 
 		_, err := h.HandleCreated(ctx, &v1.DNSZone{})
 		if wantErr := "v0_0_15 spec entry is required"; err == nil || !strings.Contains(err.Error(), wantErr) {
@@ -139,7 +139,7 @@ func TestV000015Handler(t *testing.T) {
 
 	t.Run("HandleUpdated missing entry", func(t *testing.T) {
 		pdnsClient := &fakePDNSZoneClient{}
-		h := &V000015Handler{pdns: pdnsClient}
+		h := newTestHandler(t, pdnsClient)
 
 		_, err := h.HandleUpdated(ctx, &v1.DNSZone{})
 		if wantErr := "v0_0_15 spec entry is required"; err == nil || !strings.Contains(err.Error(), wantErr) {
@@ -149,7 +149,7 @@ func TestV000015Handler(t *testing.T) {
 
 	t.Run("HandleCreated update error", func(t *testing.T) {
 		pdnsClient := &fakePDNSZoneClient{updateErr: errors.New("pdns failure")}
-		h := &V000015Handler{pdns: pdnsClient}
+		h := newTestHandler(t, pdnsClient)
 
 		_, err := h.HandleCreated(ctx, testDNSZone())
 		if wantErr := "update zone: pdns failure"; err == nil || !strings.Contains(err.Error(), wantErr) {
@@ -159,7 +159,7 @@ func TestV000015Handler(t *testing.T) {
 
 	t.Run("HandleUpdated update error", func(t *testing.T) {
 		pdnsClient := &fakePDNSZoneClient{updateErr: errors.New("pdns failure")}
-		h := &V000015Handler{pdns: pdnsClient}
+		h := newTestHandler(t, pdnsClient)
 
 		_, err := h.HandleUpdated(ctx, testDNSZone())
 		if wantErr := "update zone: pdns failure"; err == nil || !strings.Contains(err.Error(), wantErr) {
@@ -169,7 +169,7 @@ func TestV000015Handler(t *testing.T) {
 
 	t.Run("HandleDeletionRequested deletes zone", func(t *testing.T) {
 		pdnsClient := &fakePDNSZoneClient{}
-		h := &V000015Handler{pdns: pdnsClient}
+		h := newTestHandler(t, pdnsClient)
 
 		res, err := h.HandleDeletionRequested(ctx, testDNSZone())
 		if err != nil {
@@ -185,7 +185,7 @@ func TestV000015Handler(t *testing.T) {
 
 	t.Run("HandleDeletionRequested missing entry", func(t *testing.T) {
 		pdnsClient := &fakePDNSZoneClient{}
-		h := &V000015Handler{pdns: pdnsClient}
+		h := newTestHandler(t, pdnsClient)
 
 		res, err := h.HandleDeletionRequested(ctx, &v1.DNSZone{})
 		if wantErr := "v0_0_15 spec entry is required"; err == nil || !strings.Contains(err.Error(), wantErr) {
@@ -201,13 +201,97 @@ func TestV000015Handler(t *testing.T) {
 
 	t.Run("HandleDeletionRequested delete error", func(t *testing.T) {
 		pdnsClient := &fakePDNSZoneClient{deleteErr: errors.New("pdns failure")}
-		h := &V000015Handler{pdns: pdnsClient}
+		h := newTestHandler(t, pdnsClient)
 
 		_, err := h.HandleDeletionRequested(ctx, testDNSZone())
 		if wantErr := "delete zone: pdns failure"; err == nil || !strings.Contains(err.Error(), wantErr) {
 			t.Errorf("error = %v, want substring %q", err, wantErr)
 		}
 	})
+}
+
+func TestZoneFromEntry(t *testing.T) {
+	h := newTestHandler(t, &fakePDNSZoneClient{})
+
+	t.Run("translates valid CR fields", func(t *testing.T) {
+		obj := testDNSZone()
+
+		got, err := h.zoneFromEntry(obj)
+		if err != nil {
+			t.Fatalf("zoneFromEntry() error = %v", err)
+		}
+		want := pdns.Zone{
+			Name:        "example.org.",
+			Kind:        "Native",
+			Nameservers: []string{"ns1.example.org.", "ns2.example.org."},
+		}
+		if !slices.Equal(got.Nameservers, want.Nameservers) ||
+			got.Name != want.Name || got.Kind != want.Kind {
+			t.Errorf("zone = %+v, want %+v", got, want)
+		}
+	})
+
+	t.Run("absent optional nameservers", func(t *testing.T) {
+		obj := testDNSZone()
+		obj.Spec.V0_0_15.Entry.Nameservers = nil
+
+		got, err := h.zoneFromEntry(obj)
+		if err != nil {
+			t.Fatalf("zoneFromEntry() error = %v", err)
+		}
+		if got.Name != "example.org." || got.Kind != "Native" {
+			t.Errorf("zone = %+v, want name %q kind %q", got, "example.org.", "Native")
+		}
+		if len(got.Nameservers) != 0 {
+			t.Errorf("nameservers = %v, want empty", got.Nameservers)
+		}
+	})
+
+	t.Run("missing versioned entry", func(t *testing.T) {
+		obj := &v1.DNSZone{}
+
+		_, err := h.zoneFromEntry(obj)
+		if wantErr := "v0_0_15 spec entry is required"; err == nil || !strings.Contains(err.Error(), wantErr) {
+			t.Errorf("error = %v, want substring %q", err, wantErr)
+		}
+	})
+
+	t.Run("malformed versioned entry", func(t *testing.T) {
+		obj := &v1.DNSZone{
+			Spec: v1.DNSZoneSpec{
+				V0_0_15: &v1.DNSZoneSpecV0_0_15{},
+			},
+		}
+
+		_, err := h.zoneFromEntry(obj)
+		if wantErr := "v0_0_15 spec entry is required"; err == nil || !strings.Contains(err.Error(), wantErr) {
+			t.Errorf("error = %v, want substring %q", err, wantErr)
+		}
+	})
+
+	t.Run("translation error for mismatched GVK", func(t *testing.T) {
+		obj := testDNSZone()
+		obj.APIVersion = "other.example.io/v1"
+		obj.Kind = "DNSZone"
+
+		_, err := h.zoneFromEntry(obj)
+		if err == nil {
+			t.Fatal("zoneFromEntry() error = nil, want translation error")
+		}
+		if wantErr := "translate v0_0_15 entry"; !strings.Contains(err.Error(), wantErr) {
+			t.Errorf("error = %v, want substring %q", err, wantErr)
+		}
+	})
+}
+
+// newTestHandler builds a V000015Handler through the constructor.
+func newTestHandler(t *testing.T, pdnsClient PDNSZoneClient) *V000015Handler {
+	t.Helper()
+	h, err := NewV000015Handler(pdnsClient)
+	if err != nil {
+		t.Fatalf("NewV000015Handler() error = %v", err)
+	}
+	return h
 }
 
 // fakePDNSZoneClient records PDNS calls made by the handler.

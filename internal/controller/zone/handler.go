@@ -32,14 +32,18 @@ type PDNSZoneClient interface {
 	DeleteZone(ctx context.Context, zoneID string) error
 }
 
-func NewZoneHandler(predicates []predicate.Predicate, pdnsClient PDNSZoneClient) *ZoneHandler {
+func NewZoneHandler(predicates []predicate.Predicate, pdnsClient PDNSZoneClient) (*ZoneHandler, error) {
+	v0000015Handler, err := NewV000015Handler(pdnsClient)
+	if err != nil {
+		return nil, fmt.Errorf("v0_0_15 handler: %w", err)
+	}
 	zh := &ZoneHandler{
 		predicates:      predicates,
 		PDNSZoneClient:  pdnsClient,
-		v0000015Handler: &V000015Handler{pdns: pdnsClient},
+		v0000015Handler: v0000015Handler,
 	}
 	zh.VersionDispatcher = *constate.NewVersionDispatcher(zh.HandlerSelector)
-	return zh
+	return zh, nil
 }
 
 func (zh *ZoneHandler) HandlerSelector(ctx context.Context, obj *v1.DNSZone) (constate.StateHandler[v1.DNSZone], error) {

@@ -19,6 +19,8 @@ github.com/coreos/go-systemd/v22 v22.7.0/go.mod h1:xNUYtjHu2EDXbsxz1i41wouACIwT7
 github.com/cpuguy83/go-md2man/v2 v2.0.6/go.mod h1:oOW0eioCTA6cOiMLiUPZOpcVxMig6NIQQ7OS05n1F4g=
 github.com/crd2go/constate v0.0.0-20261002093940-6e087d2a2e14 h1:7zq58zGPm6tSrXPo8fBdi+ynWOU/VnucYWj41X25kO8=
 github.com/crd2go/constate v0.0.0-20261002093940-6e087d2a2e14/go.mod h1:ZyySkOIRvL5fwWwmnZ7GY+x74U6sfGg917S955IpxiE=
+github.com/crd2go/crapi v0.0.0-20260918152012-7bf71933e565 h1:r+xZWAeJxih3jjFk8w5VQWt9LDO75UUmYpBvwPlXDgU=
+github.com/crd2go/crapi v0.0.0-20260918152012-7bf71933e565/go.mod h1:qVwzyect4X3lKWLNJwfoMZdLoPpRESt6Zab1z4Z0I48=
 github.com/crd2go/crd2go v0.0.0-20260922072818-186117ce47e0 h1:IBCyCIt/sAtWgUtPkJ12or2cu8rIE0+4G45kCdM+6zs=
 github.com/crd2go/crd2go v0.0.0-20260922072818-186117ce47e0/go.mod h1:SVNbfIaPs6iC8j7F6aA879XZTGpu10Qp25VvnSQVlF4=
 github.com/crd2go/openapi2crd v0.0.0-20260922072751-d03cc999c53c h1:21KijEONxyzMDaPFVUx73gZIlbVHKvJ7C+hiFIJQO+A=
@@ -219,6 +221,8 @@ go.mongodb.org/atlas-sdk/v20250312008 v20250312008.0.0 h1:Pzrb2bPXtkw1vDTiFxovZy
 go.mongodb.org/atlas-sdk/v20250312008 v20250312008.0.0/go.mod h1:o1ExR4zmunAhRHXF5hlkVUNoJNkmyQ9vRScDGahstyQ=
 go.mongodb.org/atlas-sdk/v20250312013 v20250312013.2.0 h1:RclCsea9qDsYn6eeHdguc/uB4MrT5+Xmm+Y1DdMV6SE=
 go.mongodb.org/atlas-sdk/v20250312013 v20250312013.2.0/go.mod h1:dua7g/y3zGGBgnvMdXV2BjUVkRI4kJfGnYXMlje0Edc=
+go.mongodb.org/atlas-sdk/v20250312020 v20250312020.1.0 h1:Ba+iX5yraZiwXGs6mCyjWxMDbs5bC7kLGYpHu3R8RGM=
+go.mongodb.org/atlas-sdk/v20250312020 v20250312020.1.0/go.mod h1:8OGHqMpalr/OTRHA9kjSSg2EKfig5lrNEeNaVYphYYo=
 go.opentelemetry.io/auto/sdk v1.2.1 h1:jXsnJ4Lmnqd11kwkBV2LgLoFMZKizbCi5fNZ/ipaZ64=
 go.opentelemetry.io/auto/sdk v1.2.1/go.mod h1:KRTj+aOaElaLi+wW1kO/DZRXwkF4C5xPbEe3ZiIhN7Y=
 go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.68.0 h1:0Qx7VGBacMm9ZENQ7TnNObTYI4ShC+lHI16seduaxZo=

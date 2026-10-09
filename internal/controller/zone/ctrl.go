@@ -10,7 +10,10 @@ import (
 
 func NewPDNSZoneReconciler(
 	predicates []predicate.Predicate, pdnsClient *pdns.Client) (*constate.Reconciler[v1.DNSZone], error) {
-	zh := NewZoneHandler(predicates, pdnsClient)
+	zh, err := NewZoneHandler(predicates, pdnsClient)
+	if err != nil {
+		return nil, err
+	}
 
 	return constate.NewStateReconciler(zh), nil
 }

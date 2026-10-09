@@ -10,10 +10,13 @@ tool (
 
 require (
 	github.com/crd2go/constate v0.0.0-20261002093940-6e087d2a2e14
+	github.com/crd2go/crapi v0.0.0-20260918152012-7bf71933e565
 	github.com/magefile/mage v1.17.2
+	k8s.io/apiextensions-apiserver v0.37.0
 	k8s.io/apimachinery v0.37.0
 	k8s.io/client-go v0.37.0
 	sigs.k8s.io/controller-runtime v0.25.1
+	sigs.k8s.io/yaml v1.6.0
 )
 
 require (
@@ -123,7 +126,6 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/api v0.37.0 // indirect
-	k8s.io/apiextensions-apiserver v0.37.0 // indirect
 	k8s.io/apiserver v0.37.0 // indirect
 	k8s.io/code-generator v0.37.0 // indirect
 	k8s.io/component-base v0.37.0 // indirect
@@ -136,5 +138,4 @@ require (
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v6 v6.4.2 // indirect
-	sigs.k8s.io/yaml v1.6.0 // indirect
 )

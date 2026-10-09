@@ -5,41 +5,57 @@ import (
 	"fmt"
 	"log"
 
+	"k8s.io/apimachinery/pkg/runtime"
+
 	constate "github.com/crd2go/constate"
+	crapi "github.com/crd2go/crapi"
+	bases "github.com/josvazg/pdns4kube/config/crd/bases"
 	"github.com/josvazg/pdns4kube/internal/pdns"
 	v1 "github.com/josvazg/pdns4kube/v1"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+const (
+	// crdVersion is the CRD version used for the DNSZone resource.
+	crdVersion = "v1"
+	// majorVersion is the pinned SDK major version handled by this handler.
+	majorVersion = "v0_0_15"
+)
+
+// NewV000015Handler builds the crapi translator from the embedded CRD base
+// and the generated v1 types registered in a runtime scheme, then returns a
+// handler using it.
+func NewV000015Handler(pdnsClient PDNSZoneClient) (*V000015Handler, error) {
+	sch := runtime.NewScheme()
+	if err := v1.AddToScheme(sch); err != nil {
+		return nil, fmt.Errorf("register v1 types in scheme: %w", err)
+	}
+	crd, err := bases.CustomResourceDefinition()
+	if err != nil {
+		return nil, fmt.Errorf("parse embedded CRD: %w", err)
+	}
+	tr, err := crapi.NewTranslator(sch, crd, crdVersion, majorVersion)
+	if err != nil {
+		return nil, fmt.Errorf("create translator: %w", err)
+	}
+	return &V000015Handler{pdns: pdnsClient, translator: tr}, nil
+}
+
 type V000015Handler struct {
 	constate.FallbackHandler[v1.DNSZone]
 	// pdns performs zone mutations against the PowerDNS API.
 	pdns PDNSZoneClient
+	// translator converts CRs into pdns API objects.
+	translator crapi.Translator
 }
 
 func (h *V000015Handler) For() (client.Object, builder.Predicates) {
 	return nil, builder.Predicates{}
 }
 
-// zoneFromEntry converts the v0_0_15 spec entry into a pdns.Zone request.
-func zoneFromEntry(obj *v1.DNSZone) (pdns.Zone, error) {
-	if obj.Spec.V0_0_15 == nil || obj.Spec.V0_0_15.Entry == nil {
-		return pdns.Zone{}, fmt.Errorf("v0_0_15 spec entry is required")
-	}
-	entry := obj.Spec.V0_0_15.Entry
-	z := pdns.Zone{
-		Name: entry.Name,
-		Kind: entry.Kind,
-	}
-	if entry.Nameservers != nil {
-		z.Nameservers = *entry.Nameservers
-	}
-	return z, nil
-}
-
 func (h *V000015Handler) HandleInitial(ctx context.Context, obj *v1.DNSZone) (constate.Result, error) {
-	z, err := zoneFromEntry(obj)
+	z, err := h.zoneFromEntry(obj)
 	if err != nil {
 		return constate.ErrorState(constate.StateInitial, err)
 	}
@@ -69,7 +85,7 @@ func (h *V000015Handler) HandleDeletionRequested(ctx context.Context, obj *v1.DN
 }
 
 func (h *V000015Handler) upsert(ctx context.Context, obj *v1.DNSZone) (constate.Result, error) {
-	z, err := zoneFromEntry(obj)
+	z, err := h.zoneFromEntry(obj)
 	if err != nil {
 		return constate.ErrorState(constate.StateCreated, err)
 	}
@@ -78,4 +94,17 @@ func (h *V000015Handler) upsert(ctx context.Context, obj *v1.DNSZone) (constate.
 		return constate.ErrorState(constate.StateCreated, fmt.Errorf("update zone: %w", err))
 	}
 	return constate.NextState(constate.StateUpdated, "zone updated in pdns")
+}
+
+// zoneFromEntry converts the v0_0_15 spec entry into a pdns.Zone request
+// using the handler's stored crapi translator.
+func (h *V000015Handler) zoneFromEntry(obj *v1.DNSZone) (pdns.Zone, error) {
+	if obj.Spec.V0_0_15 == nil || obj.Spec.V0_0_15.Entry == nil {
+		return pdns.Zone{}, fmt.Errorf("v0_0_15 spec entry is required")
+	}
+	var z pdns.Zone
+	if err := h.translator.ToAPI(&z, obj); err != nil {
+		return pdns.Zone{}, fmt.Errorf("translate v0_0_15 entry: %w", err)
+	}
+	return z, nil
 }
