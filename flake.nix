@@ -34,7 +34,10 @@
             kind
             kubectl
             mage
+            bind
 	    kubernetes-controller-tools
+	    tmux
+	    asciinema
           ];
 
           shellHook = ''

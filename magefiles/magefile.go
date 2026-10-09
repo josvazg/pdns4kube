@@ -37,6 +37,11 @@ const (
 	// from the container port to avoid colliding with the operator's
 	// default health probe bind address (:8081) during `mage run`.
 	pdnsHostPort = "18081"
+	// pdnsDNSHostPort is the local port forwarding the in-cluster PowerDNS
+	// DNS service (TCP port 53) for `dig` verification.
+	pdnsDNSHostPort = "1053"
+	// pdnsDNSContainerPort is the PowerDNS DNS port inside the cluster.
+	pdnsDNSContainerPort = "53"
 )
 
 // Test runs the Go tests for the project
@@ -114,7 +119,7 @@ func PDNSDown() error {
 func PDNSForward() error {
 	mg.SerialDeps(PDNSUp)
 
-	pf, err := startPortForward()
+	pf, err := startPortForward(pdnsHostPort, pdnsContainerPort)
 	if err != nil {
 		return err
 	}
@@ -141,15 +146,25 @@ func PDNSForward() error {
 // operator exits. Use `mage pdnsDown` for explicit cleanup of PDNS resources.
 func Run() error {
 	mg.SerialDeps(KindUp, InstallCRD, PDNSUp)
+	fmt.Println("[1/4] Kind cluster and DNSZone CRD prepared.")
 
-	pf, err := startPortForward()
+	pf, err := startPortForward(pdnsHostPort, pdnsContainerPort)
 	if err != nil {
 		return err
 	}
 	defer pf.stop()
 
-	fmt.Printf("API endpoint: http://127.0.0.1:%s (header: X-API-Key: pdns4kube-dev-key)\n", pdnsHostPort)
-	fmt.Println("Running operator locally (press Ctrl+C to stop)...")
+	dnsPf, err := startPortForward(pdnsDNSHostPort, pdnsDNSContainerPort)
+	if err != nil {
+		pf.stop()
+		return err
+	}
+	defer dnsPf.stop()
+
+	fmt.Println("[2/4] PowerDNS deployment running in the kind cluster.")
+	fmt.Printf("[3/4] Local API port-forward ready at http://127.0.0.1:%s (header: X-API-Key: pdns4kube-dev-key)\n", pdnsHostPort)
+	fmt.Printf("      Local DNS port-forward ready at 127.0.0.1:%s (try: dig +tcp @127.0.0.1 -p %s example.org NS)\n", pdnsDNSHostPort, pdnsDNSHostPort)
+	fmt.Println("[4/4] Launching operator locally (press Ctrl+C to stop)...")
 
 	// Run the operator; relay its output.
 	operatorCmd := exec.Command("go", "run", "./cmd")
@@ -163,10 +178,39 @@ func Run() error {
 	if err := operatorCmd.Start(); err != nil {
 		return fmt.Errorf("starting operator: %w", err)
 	}
+	fmt.Println("Operator running locally.")
+	printManualWalkthrough()
 
 	sig := notifyInterrupt()
 	defer signal.Stop(sig)
 	return waitForOperator(operatorCmd, sig)
+}
+
+// printManualWalkthrough prints copy-paste shell commands for manually
+// creating, updating, verifying, and deleting a DNSZone while the local
+// operator and PowerDNS API are running.
+func printManualWalkthrough() {
+	fmt.Println(`
+------------------------------------------------------------------------
+Try it manually (copy-paste while the operator is running):
+
+1. Create a DNSZone for example.org with two NS records:
+
+kubectl apply -f demo/dnszone.yaml
+
+2. Update it (switch the NS records to ns3/ns4):
+
+kubectl apply -f demo/dnszone-updated.yaml
+
+3. Verify in Kubernetes and in PowerDNS:
+
+kubectl get dnszones
+dig +tcp @127.0.0.1 -p ` + pdnsDNSHostPort + ` example.org NS
+
+4. Remove it when done:
+
+kubectl delete dnszone example-org
+------------------------------------------------------------------------`)
 }
 
 // setEnv returns env with each key=value pair set, replacing any existing
@@ -230,28 +274,31 @@ func notifyInterrupt() chan os.Signal {
 // child process: it relays output, waits for 127.0.0.1:18081 readiness, and
 // stops/reaps the process on cleanup.
 type portForward struct {
-	cmd  *exec.Cmd
-	done chan struct{}
-	err  error
+	cmd *exec.Cmd
+	// localPort is the local TCP port the forward listens on.
+	localPort string
+	done      chan struct{}
+	err       error
 }
 
-// startPortForward starts the kubectl port-forward child process and waits
-// (bounded) for 127.0.0.1:18081 to become reachable.
-func startPortForward() (*portForward, error) {
-	cmd := exec.Command("kubectl", "port-forward", "service/pdns-dev", pdnsHostPort+":"+pdnsContainerPort)
+// startPortForward starts a `kubectl port-forward service/pdns-dev
+// <localPort>:<remotePort>` child process and waits (bounded) for
+// 127.0.0.1:<localPort> to become reachable.
+func startPortForward(localPort, remotePort string) (*portForward, error) {
+	cmd := exec.Command("kubectl", "port-forward", "service/pdns-dev", localPort+":"+remotePort)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("starting kubectl port-forward: %w", err)
 	}
 
-	pf := &portForward{cmd: cmd, done: make(chan struct{})}
+	pf := &portForward{cmd: cmd, localPort: localPort, done: make(chan struct{})}
 	go func() {
 		pf.err = cmd.Wait()
 		close(pf.done)
 	}()
 
-	fmt.Printf("Port-forward running (kubectl port-forward service/pdns-dev %s:%s)\n", pdnsHostPort, pdnsContainerPort)
+	fmt.Printf("Port-forward running (kubectl port-forward service/pdns-dev %s:%s)\n", localPort, remotePort)
 	if err := pf.waitReady(30 * time.Second); err != nil {
 		pf.stop()
 		return nil, err
@@ -259,7 +306,7 @@ func startPortForward() (*portForward, error) {
 	return pf, nil
 }
 
-// waitReady polls 127.0.0.1:18081 until it accepts connections, the
+// waitReady polls 127.0.0.1:<localPort> until it accepts connections, the
 // port-forward process exits early, or the timeout elapses.
 func (pf *portForward) waitReady(timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
@@ -269,13 +316,13 @@ func (pf *portForward) waitReady(timeout time.Duration) error {
 			return fmt.Errorf("kubectl port-forward exited early with: %v", pf.err)
 		default:
 		}
-		conn, err := net.DialTimeout("tcp", "127.0.0.1:"+pdnsHostPort, 500*time.Millisecond)
+		conn, err := net.DialTimeout("tcp", "127.0.0.1:"+pf.localPort, 500*time.Millisecond)
 		if err == nil {
 			_ = conn.Close()
 			return nil
 		}
 		if time.Now().After(deadline) {
-			return fmt.Errorf("timed out after %s waiting for 127.0.0.1:%s to become ready: %w", timeout, pdnsHostPort, err)
+			return fmt.Errorf("timed out after %s waiting for 127.0.0.1:%s to become ready: %w", timeout, pf.localPort, err)
 		}
 		time.Sleep(250 * time.Millisecond)
 	}

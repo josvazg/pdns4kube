@@ -10,6 +10,7 @@ with the PowerDNS Authoritative API.
 - [Docker](https://www.docker.com/)
 - [Kind](https://kind.sigs.k8s.io/)
 - [kubectl](https://kubernetes.io/docs/reference/kubectl/)
+- [dig](https://bind9.readthedocs.io/) (from BIND, for verifying DNS)
 - [Mage](https://magefile.org/)
 
 Alternatively, if you use [Nix](https://nixos.org/), you can obtain the dev tools
@@ -38,34 +39,28 @@ mage run
 ```
 
 This creates a Kind cluster named `pdns4kube`, installs the CRD, deploys a dev PowerDNS,
-forwards its API to `http://localhost:18081`, and runs the operator locally. The operator
-is configured via the `PDNS_API_URL` and `PDNS_API_KEY` environment variables (set
-automatically by `mage run`).
+forwards its API to `http://localhost:18081`, forwards its DNS (TCP) to `localhost:1053`,
+and runs the operator locally. The operator is configured via the `PDNS_API_URL` and
+`PDNS_API_KEY` environment variables (set automatically by `mage run`).
 
 While `mage run` is running, create a zone:
 
 ```sh
-kubectl apply -f - <<'EOF'
-apiVersion: pdns.example.io/v1
-kind: DNSZone
-metadata:
-  name: example-org
-spec:
-  v0_0_15:
-    entry:
-      kind: Native
-      name: example.org.
-      nameservers:
-        - ns1.example.org.
-        - ns2.example.org.
-EOF
+kubectl apply -f demo/dnszone.yaml
 ```
 
-Verify the zone exists in PowerDNS:
+This creates a `DNSZone` for `example.org` with two NS records (`ns1`/`ns2`). Update it
+to switch the NS records to `ns3`/`ns4`:
+
+```sh
+kubectl apply -f demo/dnszone-updated.yaml
+```
+
+Verify the zone exists in Kubernetes and that PowerDNS serves the NS records:
 
 ```sh
 kubectl get dnszones
-curl -s -H "X-API-Key: pdns4kube-dev-key" http://localhost:18081/api/v1/servers/localhost/zones
+dig +tcp @127.0.0.1 -p 1053 example.org NS
 ```
 
 ## Cleanup
