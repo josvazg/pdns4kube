@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -32,10 +33,18 @@ type operatorCfg struct {
 	zopts                zap.Options
 }
 
+type getCfgFunc func() (*rest.Config, error)
+
 // Run executes the operator with the given arguments and environment
 // lookup. getenv is used for environment driven configuration; when nil
 // it falls back to os.Getenv.
-func Run(ctx context.Context, args []string, getenv func(string) string) error {
+func Run(ctx context.Context, args []string, getenv func(string) string, getConfig getCfgFunc) error {
+	return run(ctx, args, getenv, ctrl.GetConfig)
+}
+
+// run is the testable core of Run; getConfig is the seam used to obtain
+// the Kubernetes rest config (production uses ctrl.GetConfig).
+func run(ctx context.Context, args []string, getenv func(string) string, getConfig getCfgFunc) error {
 	if getenv == nil {
 		getenv = os.Getenv
 	}
@@ -44,7 +53,7 @@ func Run(ctx context.Context, args []string, getenv func(string) string) error {
 		return fmt.Errorf("failed to parse config args: %w", err)
 	}
 
-	mgr, err := createManager(opConfig)
+	mgr, err := createManager(opConfig, getConfig)
 	if err != nil {
 		return fmt.Errorf("failed to create manager: %w", err)
 	}
@@ -89,14 +98,16 @@ func parseFlagsConfig(args []string, getenv func(string) string) (*operatorCfg, 
 	}, nil
 }
 
-func createManager(opConfig *operatorCfg) (manager.Manager, error) {
+// createManager builds the controller manager. getConfig is the seam used
+// to obtain the Kubernetes rest config.
+func createManager(opConfig *operatorCfg, getConfig func() (*rest.Config, error)) (manager.Manager, error) {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opConfig.zopts)))
 
 	scheme := runtime.NewScheme()
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(v1.AddToScheme(scheme))
 
-	cfg, err := ctrl.GetConfig()
+	cfg, err := getConfig()
 	if err != nil {
 		return nil, fmt.Errorf("get config: %w", err)
 	}

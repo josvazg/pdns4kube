@@ -25,6 +25,12 @@ const (
 	pdnsHostPort = "18081"
 )
 
+// Test runs the Go tests for the project
+func Test() error {
+	fmt.Printf("Go tests...")
+	return sh.RunV("go", "test", "-v", "-coverprofile=coverage.out", "./...")
+}
+
 // GenCRD runs openapi2crd to generate the Kubernetes Custom Resource Definitions.
 func GenCRD() error {
 	fmt.Println("Generating CRDs from OpenAPI spec...")

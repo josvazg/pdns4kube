@@ -2,9 +2,11 @@ package operator
 
 import (
 	"context"
-	"path/filepath"
+	"errors"
 	"strings"
 	"testing"
+
+	"k8s.io/client-go/rest"
 )
 
 func TestRun(t *testing.T) {
@@ -25,25 +27,25 @@ func TestRun(t *testing.T) {
 			wantErr: "parse flags",
 		},
 		{
-			name: "missing kubeconfig",
-			env: map[string]string{
-				"KUBECONFIG": filepath.Join(t.TempDir(), "does-not-exist.yaml"),
-			},
+			name:    "get config failure",
 			wantErr: "get config",
 		},
 		{
-			name: "unknown flag in otherwise valid args",
-			args: []string{"-metrics-bind-address", ":9090", "-nope"},
-			env: map[string]string{
-				"KUBECONFIG": filepath.Join(t.TempDir(), "does-not-exist.yaml"),
-			},
+			name:    "unknown flag in otherwise valid args",
+			args:    []string{"-metrics-bind-address", ":9090", "-nope"},
 			wantErr: "parse flags",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			getenv := func(key string) string { return tt.env[key] }
-			err := Run(context.Background(), tt.args, getenv)
+			// All test cases exit before the manager starts, so inject a
+			// getConfig that always fails; flag parse errors take precedence
+			// over it.
+			getConfig := func() (*rest.Config, error) {
+				return nil, errors.New("injected config failure")
+			}
+			err := run(context.Background(), tt.args, getenv, getConfig)
 			if tt.wantErr == "" {
 				if err != nil {
 					t.Fatalf("Run() error = %v, want nil", err)

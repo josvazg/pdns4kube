@@ -11,7 +11,7 @@ import (
 
 func main() {
 	ctx := ctrl.SetupSignalHandler()
-	if err := operator.Run(ctx, os.Args[1:], os.Getenv); err != nil {
+	if err := operator.Run(ctx, os.Args[1:], os.Getenv, ctrl.GetConfig); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
