@@ -1,3 +1,18 @@
+> [!IMPORTANT]
+> ### 🚨 This repository has moved!
+>
+> Active development and canonical maintenance have migrated to the `crd2go` organization:
+>
+> 👉 **[github.com/crd2go/pdns4kube](https://github.com/crd2go/pdns4kube)**
+>
+> Please update your bookmarks, stars, and local Git remotes:
+>
+> ```bash
+> git remote set-url origin git@github.com:crd2go/pdns4kube.git
+> # or via HTTPS
+> git remote set-url origin [https://github.com/crd2go/pdns4kube.git](https://github.com/crd2go/pdns4kube.git)
+> ```
+
 # pdns4kube
 
 A Kubernetes operator that manages DNS zones provisioned by an [PowerDNS](https://www.powerdns.com/) Authoritative Server.
